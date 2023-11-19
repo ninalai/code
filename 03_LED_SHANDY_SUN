@@ -1,0 +1,169 @@
+const int dataIn = 12;
+const int load = 11;
+const int clock = 10;
+const int rotaryEncoderPinA = 3;
+const int rotaryEncoderPinB = 4;
+const int rotaryEncoderSW = 2;
+
+int maxInUse = 4;
+int encoderDegrees = 0; // Variable to store the current rotation angle
+int encoderPinALast = LOW;
+int lastMillis = 0;
+int brightness = 255;
+int illuminatedRow = 0;  // Variable to store the currently illuminated row
+
+// Function prototype
+void shaft_moved();
+void maxAll(byte reg, byte col);  // Declaration of maxAll function
+
+void putByte(byte data) {
+  for (byte i = 8; i > 0; --i) {
+    digitalWrite(clock, LOW);   // tick
+    digitalWrite(dataIn, (data & (1 << (i - 1))) ? HIGH : LOW);  // send bit
+    digitalWrite(clock, HIGH);  // tock
+  }
+}
+
+void maxOne(byte maxNr, byte reg, byte col) {
+  digitalWrite(load, LOW);
+
+  for (int c = maxInUse; c > maxNr; c--) {
+    putByte(0);  // no operation
+    putByte(0);  // no operation
+  }
+
+  putByte(reg);  // specify register
+  putByte(col);
+
+  for (int c = maxNr - 1; c >= 1; c--) {
+    putByte(0);  // no operation
+    putByte(0);  // no operation
+  }
+
+  digitalWrite(load, LOW);
+  digitalWrite(load, HIGH);
+}
+
+void readEncoder() {
+  int encoderValue = digitalRead(rotaryEncoderPinA);
+  if ((encoderPinALast == LOW) && (encoderValue == HIGH)) {
+    if (digitalRead(rotaryEncoderPinB) == LOW) {
+      encoderDegrees += 5; // Adjust the value based on your encoder's resolution
+    } else {
+      encoderDegrees -= 5; // Adjust the value based on your encoder's resolution
+    }
+
+    // Ensure that degrees are within a valid range (0-360, or adjust as needed)
+    encoderDegrees = (encoderDegrees + 360) % 360;
+
+    // Update illuminated row based on encoder position
+    illuminatedRow = encoderDegrees / 45; // Assuming 8 rows, adjust if different
+
+    // Calculate speed of rotation
+    int currentMillis = millis();
+    int rotationSpeed = 1000 / (currentMillis - lastMillis + 1);
+    lastMillis = currentMillis;
+
+    // Adjust brightness based on rotation speed
+    brightness = map(rotationSpeed, 0, 50, 50, 255);
+
+    // Display flash based on rotation speed
+    maxOne(1, illuminatedRow + 1, brightness);  // Adjust the 1 to the desired MAX7219 index
+
+    encoderPinALast = encoderValue;
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+  attachInterrupt(digitalPinToInterrupt(rotaryEncoderPinA), shaft_moved, FALLING);
+  pinMode(rotaryEncoderSW, INPUT_PULLUP);
+  pinMode(rotaryEncoderPinA, INPUT);
+  pinMode(rotaryEncoderPinB, INPUT);
+
+  pinMode(dataIn, OUTPUT);
+  pinMode(clock, OUTPUT);
+  pinMode(load, OUTPUT);
+
+  // Initialize LED matrix
+  maxAll(1, 0);  // Turn off all LEDs initially
+
+  // ... (rest of your setup code)
+}
+
+void loop() {
+  readEncoder();
+
+  // Your existing code for printing counter and direction
+  Serial.print("degrees : ");
+  Serial.print(encoderDegrees);
+  Serial.print(" direction : ");
+  Serial.println((encoderDegrees > 0) ? "CW" : "CCW");
+
+  if (encoderDegrees > 30) {
+      Serial.print("HI");
+      maxAll(1,8);          // ----@---
+      maxAll(2,74);         // -@--@-@-
+      maxAll(3,44);         // --@-@@--
+      maxAll(4,248);        // @@@@@---
+      maxAll(5,31);         // ---@@@@@
+      maxAll(6,52);         // --@@-@--
+      maxAll(7,82);         // -@-@--@-
+      maxAll(8,16);         // ---@----
+      delay(500);
+      maxAll(1,72);         // -@--@---
+      maxAll(2,41);         // --@-@--@
+      maxAll(3,26);         // ---@@-@-
+      maxAll(4,252);        // @@@@@@--
+      maxAll(5,63);         // --@@@@@@
+      maxAll(6,88);         // -@-@@---
+      maxAll(7,148);        // @--@-@--
+      maxAll(8,18);         // ---@--@-
+      delay(100);
+      maxAll(1,68);         // -@---@--
+      maxAll(2,37);         // --@--@-@
+      maxAll(3,218);        // @@-@@-@-
+      maxAll(4,60);         // --@@@@--
+      maxAll(5,60);         // --@@@@--
+      maxAll(6,91);         // -@-@@-@@
+      maxAll(7,164);        // @-@--@--
+      maxAll(8,34);         // --@---@-
+      delay(100);
+      maxAll(1,36);         // --@--@--
+      maxAll(2,20);         // ---@-@--
+      maxAll(3,217);        // @@-@@--@
+      maxAll(4,62);         // --@@@@@-
+      maxAll(5,124);        // -@@@@@--
+      maxAll(6,155);        // @--@@-@@
+      maxAll(7,40);         // --@-@---
+      maxAll(8,36);         // --@--@--
+      delay(100);
+    }
+}
+
+// Function definition for shaft_moved
+void shaft_moved() {
+  if (millis() - lastMillis > 5) {
+    if (digitalRead(rotaryEncoderSW) == 1) {
+      encoderDegrees += 5; // Adjust the value based on your encoder's resolution
+    }
+    if (digitalRead(rotaryEncoderSW) == 0) {
+      encoderDegrees -= 5; // Adjust the value based on your encoder's resolution
+    }
+    // Ensure that degrees are within a valid range (0-360, or adjust as needed)
+    encoderDegrees = (encoderDegrees + 360) % 360;
+
+    lastMillis = millis();
+  }
+}
+
+// Function definition for maxAll
+void maxAll(byte reg, byte col) {
+  digitalWrite(load, LOW);
+  for (int c = 0; c < maxInUse; ++c) {
+    putByte(reg);  // specify register
+    putByte(col);
+  }
+  digitalWrite(load, HIGH);
+}
+
